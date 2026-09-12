@@ -386,6 +386,54 @@ input:focus,select:focus,textarea:focus{
   color:#1e6a37;
   font-size:13px;
 }
+
+.send-panel{
+  margin-top:18px;
+  padding:18px;
+  display:flex;
+  gap:14px;
+  align-items:flex-start;
+  background:#f7fbf8;
+  border:1px solid #cfe6d5;
+  border-radius:12px;
+}
+.send-icon{
+  width:38px;height:38px;border-radius:50%;
+  display:grid;place-items:center;flex:none;
+  background:#25d366;color:#fff;font-weight:900;font-size:20px;
+}
+.send-panel h3{margin:1px 0 6px;font-size:15px}
+.send-panel p{margin:0;color:#5e6368;font-size:12.5px;line-height:1.55}
+.final-actions{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:20px;
+}
+.btn-whatsapp{
+  background:#25d366;
+  color:#fff;
+  border:none;
+  box-shadow:0 8px 20px rgba(37,211,102,.18);
+}
+.btn-whatsapp:hover{background:#20bd5a;transform:translateY(-1px)}
+.btn-whatsapp:disabled{opacity:.65;cursor:wait;transform:none}
+.send-status{
+  display:none;
+  margin-top:14px;
+  padding:14px 16px;
+  border-radius:10px;
+  font-size:12.5px;
+  line-height:1.5;
+}
+.send-status.info{display:block;background:#f2f7ff;border:1px solid #cbdcf5;color:#284c7a}
+.send-status.ok{display:block;background:#f3fff7;border:1px solid #b9e5c7;color:#1e6a37}
+.send-status.warn{display:block;background:#fff9e8;border:1px solid #f3d77a;color:#6a5415}
+@media(max-width:760px){
+  .final-actions{flex-direction:column-reverse}
+  .final-actions .btn{width:100%}
+}
+
 @media(max-width:1050px){
   .header{grid-template-columns:150px 1fr}.contact{grid-column:1/-1;border-left:0;border-top:1px solid rgba(255,255,255,.18);padding:14px 0 0;grid-template-columns:repeat(3,1fr)}
   .logo{width:132px}
@@ -433,6 +481,7 @@ input:focus,select:focus,textarea:focus{
   .footer{margin-top:20px}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <header class="topbar">
@@ -646,20 +695,27 @@ input:focus,select:focus,textarea:focus{
 
         <section class="step-page" data-step="10" id="step10">
           <h2 class="section-title">11. Revisão e Envio</h2>
-          <p class="section-subtitle">Revise os dados, salve uma cópia e finalize o levantamento.</p>
+          <p class="section-subtitle">Confira as informações abaixo. Quando estiver tudo certo, envie o levantamento para a WL Sistemas pelo WhatsApp.</p>
           <div id="summaryFinal" class="summary"></div>
+
           <div class="notice" style="margin-top:18px">
-            Este levantamento tem como objetivo definir o escopo inicial do projeto. Alterações significativas após a aprovação poderão gerar revisão de prazo e orçamento.
+            Este levantamento define o escopo inicial do projeto. Alterações significativas após a aprovação poderão gerar revisão de prazo e orçamento.
           </div>
-          <div class="print-actions">
-            <button type="button" class="btn btn-primary" onclick="printReport()">🖨 Imprimir / Salvar PDF</button>
-            <button type="button" class="btn btn-outline" onclick="downloadJSON()">⬇ Exportar JSON</button>
-            <button type="button" class="btn btn-outline" onclick="downloadTXT()">⬇ Exportar TXT</button>
-            <button type="button" class="btn btn-outline" onclick="copySummary()">📋 Copiar resumo</button>
-            <button type="button" class="btn btn-outline" onclick="saveDraft()">💾 Salvar rascunho</button>
-            <button type="button" class="btn btn-outline" onclick="clearDraft()">🗑 Limpar rascunho</button>
+
+          <div class="send-panel">
+            <div class="send-icon">✓</div>
+            <div>
+              <h3>Pronto para enviar?</h3>
+              <p>O sistema preparará um PDF profissional com suas respostas. No celular, você poderá compartilhar o arquivo diretamente pelo WhatsApp. No computador, o PDF será baixado e o WhatsApp será aberto com a mensagem pronta.</p>
+            </div>
           </div>
-          <div id="successBox" class="success-box">Rascunho salvo neste navegador.</div>
+
+          <div class="final-actions">
+            <button type="button" class="btn btn-secondary" onclick="goStep(9)">← Voltar e revisar</button>
+            <button type="button" class="btn btn-whatsapp" id="sendWhatsBtn" onclick="sendToWL()">📲 Enviar para WL Sistemas</button>
+          </div>
+
+          <div id="sendStatus" class="send-status" aria-live="polite"></div>
         </section>
 
         <div class="nav-buttons">
@@ -750,8 +806,14 @@ function updateUI(){
   document.getElementById("percent").textContent = pct+"%";
   document.getElementById("ring").style.setProperty("--p",pct);
   document.getElementById("stepCount").textContent = currentStep+1;
-  document.getElementById("prevBtn").style.visibility = currentStep===0?"hidden":"visible";
-  document.getElementById("nextBtn").style.display = currentStep===totalSteps-1?"none":"inline-block";
+  const navButtons = document.querySelector(".nav-buttons");
+  if(currentStep===totalSteps-1){
+    navButtons.style.display = "none";
+  }else{
+    navButtons.style.display = "flex";
+    document.getElementById("prevBtn").style.visibility = currentStep===0?"hidden":"visible";
+    document.getElementById("nextBtn").style.display = "inline-block";
+  }
   if(currentStep===9) buildSummary("summaryPreview");
   if(currentStep===10) buildSummary("summaryFinal");
   window.scrollTo({top:0,behavior:"smooth"});
@@ -914,6 +976,256 @@ function downloadTXT(){
   out+=Object.entries(d).map(([k,v])=>`${k.toUpperCase()}: ${Array.isArray(v)?v.join(", "):v}`).join("\n");
   downloadFile(`${d.protocolo}_levantamento.txt`,out,"text/plain;charset=utf-8");
 }
+
+
+function pdfText(v){
+  if(Array.isArray(v)) return v.join(", ");
+  const s = (v ?? "").toString().trim();
+  return s || "Não informado";
+}
+
+function safeFileName(s){
+  return String(s || "levantamento")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-zA-Z0-9_-]+/g,"-")
+    .replace(/-+/g,"-")
+    .replace(/^-|-$/g,"");
+}
+
+function buildPDFBlob(){
+  if(!window.jspdf || !window.jspdf.jsPDF){
+    throw new Error("A biblioteca de PDF ainda não foi carregada. Verifique sua conexão com a internet e tente novamente.");
+  }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
+  const d = getData();
+
+  const margin = 15;
+  const pageW = 210;
+  const pageH = 297;
+  const usableW = pageW - margin*2;
+  let y = 17;
+
+  const addPageIfNeeded = (needed=12) => {
+    if(y + needed > pageH - 16){
+      doc.addPage();
+      y = 17;
+    }
+  };
+
+  const addFooter = () => {
+    const pages = doc.getNumberOfPages();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);
+      doc.setDrawColor(230,230,230);
+      doc.line(margin, 282, pageW-margin, 282);
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(8);
+      doc.setTextColor(105,105,105);
+      doc.text("WL Sistemas • (43) 99976-3864 • www.wlsistemas.shop", margin, 288);
+      doc.text(`Página ${i} de ${pages}`, pageW-margin, 288, {align:"right"});
+    }
+  };
+
+  const section = title => {
+    addPageIfNeeded(14);
+    doc.setFillColor(247,181,0);
+    doc.rect(margin, y, 3, 7, "F");
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(12);
+    doc.setTextColor(25,25,25);
+    doc.text(title, margin+6, y+5.2);
+    y += 12;
+  };
+
+  const item = (label, value) => {
+    const txt = pdfText(value);
+    const lines = doc.splitTextToSize(txt, usableW);
+    const need = 7 + lines.length*4.4;
+    addPageIfNeeded(need);
+
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(9);
+    doc.setTextColor(65,65,65);
+    doc.text(label, margin, y);
+
+    y += 4.5;
+    doc.setFont("helvetica","normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(25,25,25);
+    doc.text(lines, margin, y);
+    y += lines.length*4.4 + 3;
+  };
+
+  // Cabeçalho
+  doc.setFillColor(10,10,10);
+  doc.rect(0,0,pageW,34,"F");
+  doc.setFillColor(247,181,0);
+  doc.rect(0,34,pageW,1.2,"F");
+  doc.setFont("helvetica","bold");
+  doc.setTextColor(247,181,0);
+  doc.setFontSize(18);
+  doc.text("WL SISTEMAS", margin, 14);
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13);
+  doc.text("Diagnóstico e Levantamento de Requisitos", margin, 22);
+  doc.setFont("helvetica","normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(205,205,205);
+  doc.text("Tecnologia sem complicação • Soluções sob medida", margin, 28);
+
+  y = 44;
+
+  doc.setFillColor(248,249,250);
+  doc.roundedRect(margin,y,usableW,20,2,2,"F");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(9);
+  doc.setTextColor(70,70,70);
+  doc.text("PROTOCOLO", margin+5, y+6);
+  doc.text("DATA DO LEVANTAMENTO", margin+100, y+6);
+  doc.setFontSize(11);
+  doc.setTextColor(20,20,20);
+  doc.text(pdfText(d.protocolo), margin+5, y+13);
+  doc.text(pdfText(d.dataLevantamento), margin+100, y+13);
+  y += 28;
+
+  section("1. Dados do Cliente");
+  item("Razão Social / Nome", d.razao);
+  item("Nome Fantasia", d.fantasia);
+  item("CNPJ / CPF", d.documento);
+  item("Responsável pelo Projeto", d.responsavel);
+  item("Cargo / Função", d.cargo);
+  item("Telefone / WhatsApp", d.telefone);
+  item("E-mail", d.email);
+  item("Cidade / Estado", `${pdfText(d.cidade)} / ${pdfText(d.estado)}`);
+  item("Descrição da empresa", d.descricaoEmpresa);
+
+  section("2. Diagnóstico do Negócio");
+  item("Como o processo funciona atualmente", d.processoAtual);
+  item("Principal problema a resolver", d.problema);
+  item("Pessoas envolvidas no processo", d.pessoasProcesso);
+  item("Sistema ou planilha usado atualmente", d.sistemaAtual);
+  item("Resultado esperado", d.resultadoEsperado);
+
+  section("3. Sobre o Sistema");
+  item("Nome desejado", d.nomeSistema);
+  item("Tipo de sistema", d.tipoSistema);
+  item("Objetivo principal", d.objetivo);
+  item("Quem utilizará", d.usuarios);
+
+  section("4. Funcionalidades");
+  item("Funcionalidades selecionadas", d.funcionalidades);
+  item("Outras funcionalidades", d.outrasFunc);
+
+  section("5. Regras de Negócio");
+  item("Regras", d.regras);
+  item("Aprovações / etapas obrigatórias", d.aprovacoes);
+  item("Cálculos, taxas, comissões ou fórmulas", d.calculos);
+
+  section("6. Integrações");
+  item("Integrações selecionadas", d.integracoes);
+  item("Outras integrações", d.outrasIntegracoes);
+
+  section("7. Acessos e Dispositivos");
+  item("Dispositivos", d.dispositivos);
+  item("Quantidade estimada de usuários", d.qtdUsuarios);
+  item("Funcionamento sem internet", d.offline);
+  item("Login individual", d.loginIndividual);
+  item("Níveis de acesso", d.niveisAcesso);
+
+  section("8. Identidade Visual");
+  item("Possui logotipo", d.possuiLogo);
+  item("Cores da marca", d.cores);
+  item("Referências visuais", d.referencias);
+  item("Estilo desejado", d.estilo);
+
+  section("9. Prioridades");
+  item("Essencial para a primeira versão", d.essencial);
+  item("Desejável", d.desejavel);
+  item("Para versão futura", d.futuro);
+  item("Prazo desejado", d.prazo);
+  item("Orçamento previsto", d.orcamento);
+
+  addPageIfNeeded(28);
+  doc.setFillColor(255,249,232);
+  doc.setDrawColor(243,215,122);
+  const note = "Este levantamento tem como objetivo definir o escopo inicial do projeto. Alterações significativas após a aprovação poderão gerar revisão de prazo e orçamento.";
+  const noteLines = doc.splitTextToSize(note, usableW-10);
+  doc.roundedRect(margin,y,usableW,12 + noteLines.length*4,2,2,"FD");
+  doc.setFont("helvetica","bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90,70,15);
+  doc.text("Importante sobre o escopo", margin+5, y+6);
+  doc.setFont("helvetica","normal");
+  doc.text(noteLines, margin+5, y+11);
+
+  addFooter();
+
+  return {
+    blob: doc.output("blob"),
+    fileName: `${safeFileName(d.protocolo)}-levantamento-WL-Sistemas.pdf`,
+    data: d
+  };
+}
+
+function setSendStatus(message, type="info"){
+  const el = document.getElementById("sendStatus");
+  if(!el) return;
+  el.className = `send-status ${type}`;
+  el.textContent = message;
+}
+
+async function sendToWL(){
+  const btn = document.getElementById("sendWhatsBtn");
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = "Preparando PDF...";
+  setSendStatus("Gerando seu relatório em PDF. Aguarde alguns segundos.", "info");
+
+  try{
+    autoSave();
+    const {blob, fileName, data} = buildPDFBlob();
+    const file = new File([blob], fileName, {type:"application/pdf"});
+    const msg = `Olá, sou ${pdfText(data.responsavel)}${data.razao ? " da " + pdfText(data.razao) : ""}. Finalizei o levantamento de requisitos do projeto ${pdfText(data.protocolo)}. Estou enviando o PDF para análise da WL Sistemas.`;
+
+    // Celulares/navegadores compatíveis: compartilha o próprio PDF.
+    if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+      btn.textContent = "Abrindo compartilhamento...";
+      await navigator.share({
+        title:"Levantamento de Requisitos - WL Sistemas",
+        text:msg,
+        files:[file]
+      });
+      setSendStatus("Compartilhamento concluído. Selecione o WhatsApp e envie o PDF para a WL Sistemas.", "ok");
+    }else{
+      // Desktop/fallback: baixa o PDF e abre a conversa com a mensagem pronta.
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2500);
+
+      const whatsapp = `https://wa.me/5543999763864?text=${encodeURIComponent(msg + "\\n\\nO PDF foi baixado no meu computador e vou anexá-lo nesta conversa.")}`;
+      window.open(whatsapp, "_blank");
+      setSendStatus("PDF baixado. O WhatsApp foi aberto com a mensagem pronta. Agora anexe o PDF baixado à conversa e envie.", "warn");
+    }
+  }catch(err){
+    console.error(err);
+    if(err && err.name === "AbortError"){
+      setSendStatus("O compartilhamento foi cancelado. Você pode clicar em “Enviar para WL Sistemas” novamente quando quiser.", "warn");
+    }else{
+      setSendStatus("Não foi possível preparar o PDF. Verifique sua conexão com a internet e tente novamente.", "warn");
+    }
+  }finally{
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
 
 function plain(v){
   if(Array.isArray(v)) return v.join(", ");
